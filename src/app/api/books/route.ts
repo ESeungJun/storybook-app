@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (bookError) {
+    console.error('[books POST] bookError:', JSON.stringify(bookError));
     return NextResponse.json({ error: bookError.message }, { status: 500 });
   }
 

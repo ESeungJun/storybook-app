@@ -59,6 +59,10 @@ export default function EditorHeader() {
         저장
       </Button>
 
+      <Button variant="ghost" size="sm" onClick={() => window.open(`/book/${bookId}`, '_blank')}>
+        미리보기
+      </Button>
+
       {!showSubmitConfirm ? (
         <Button size="sm" onClick={() => setShowSubmitConfirm(true)}>
           제출

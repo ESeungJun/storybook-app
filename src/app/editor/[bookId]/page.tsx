@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Canvas, IText, FabricImage } from 'fabric';
+import { Canvas, IText, FabricImage, Rect } from 'fabric';
 import { useEditorStore } from '@/stores/editorStore';
+import { getTemplate } from '@/lib/fabric/templates';
 import AuthGuard from '@/components/layout/AuthGuard';
 import EditorHeader from '@/components/editor/EditorHeader';
 import EditorToolbar from '@/components/editor/EditorToolbar';
@@ -36,6 +37,7 @@ function EditorContent() {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const {
+    pages,
     setBookId,
     setBookTitle,
     setPages,
@@ -152,7 +154,11 @@ function EditorContent() {
   const handleCanvasChange = useCallback(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
+    // 가이드/텍스트존 임시 숨기고 저장
+    const guides = canvas.getObjects().filter(o => (o as any).__isGuide || (o as any).__isTextZone);
+    guides.forEach(o => { o.visible = false; });
     const json = canvas.toJSON();
+    guides.forEach(o => { o.visible = true; });
     const idx = useEditorStore.getState().currentPageIndex;
     updatePageCanvas(idx, json);
     pushUndo(JSON.stringify(json));
@@ -210,6 +216,59 @@ function EditorContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPageIndex]);
 
+  // 템플릿 변경 시 가이드 즉시 반영
+  const currentTemplateType = pages[currentPageIndex]?.templateType;
+  useEffect(() => {
+    const canvas = fabricRef.current;
+    if (!canvas || loading) return;
+    applyTemplateGuides(canvas, currentTemplateType || 'full_illustration');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTemplateType]);
+
+  const applyTemplateGuides = (canvas: Canvas, templateType: string) => {
+    // 기존 가이드 및 텍스트 플레이스홀더 제거
+    const existing = canvas.getObjects().filter(o => (o as any).__isGuide || (o as any).__isTextZone);
+    existing.forEach(o => canvas.remove(o));
+
+    const template = getTemplate(templateType);
+    template.zones.forEach(zone => {
+      if (zone.type === 'illustration') {
+        // 그림 영역: 파란 점선 가이드
+        const rect = new Rect({
+          left: zone.x,
+          top: zone.y,
+          width: zone.width,
+          height: zone.height,
+          fill: 'rgba(219,234,254,0.25)',
+          stroke: '#93c5fd',
+          strokeWidth: 2,
+          strokeDashArray: [8, 4],
+          selectable: false,
+          evented: false,
+          excludeFromExport: true,
+        });
+        (rect as any).__isGuide = true;
+        canvas.add(rect);
+        canvas.sendObjectToBack(rect);
+      } else {
+        // 텍스트 영역: IText 박스 자동 배치
+        const padding = 24;
+        const textBox = new IText('여기에 텍스트를 입력하세요', {
+          left: zone.x + padding,
+          top: zone.y + padding,
+          width: zone.width - padding * 2,
+          fontSize: Math.min(36, zone.height / 4),
+          fontFamily: 'sans-serif',
+          fill: '#374151',
+          editable: true,
+        });
+        (textBox as any).__isTextZone = true;
+        canvas.add(textBox);
+      }
+    });
+    canvas.renderAll();
+  };
+
   const loadCanvasFromPage = (index: number) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
@@ -221,11 +280,13 @@ function EditorContent() {
     const canvasData = page.canvasJSON;
     if (canvasData && Object.keys(canvasData).length > 0) {
       canvas.loadFromJSON(canvasData).then(() => {
+        applyTemplateGuides(canvas, page.templateType);
         canvas.renderAll();
       });
     } else {
       canvas.clear();
       canvas.backgroundColor = '#ffffff';
+      applyTemplateGuides(canvas, page.templateType);
       canvas.renderAll();
     }
   };

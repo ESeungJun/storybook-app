@@ -9,8 +9,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, name: string, role: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -32,24 +31,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      if (user) await fetchProfile(user.id);
-      setIsLoading(false);
-    };
-
-    getSession();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         setUser(session?.user ?? null);
+        setIsLoading(false); // 프로필 기다리지 않고 즉시 해제
         if (session?.user) {
-          await fetchProfile(session.user.id);
+          fetchProfile(session.user.id); // 백그라운드에서 가져오기
         } else {
           setProfile(null);
         }
-        setIsLoading(false);
       }
     );
 
@@ -57,20 +47,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
-  };
-
-  const signUp = async (email: string, password: string, name: string, role: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
       options: {
-        data: { name, role },
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-    return { error: error?.message ?? null };
   };
 
   const signOut = async () => {
@@ -80,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, isLoading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, profile, isLoading, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );

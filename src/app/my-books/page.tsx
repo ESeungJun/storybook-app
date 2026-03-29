@@ -26,7 +26,10 @@ function MyBooksContent() {
   const router = useRouter();
 
   const fetchBooks = async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     const res = await fetch(`/api/books?authorId=${user.id}`);
     const data = await res.json();
     setBooks(Array.isArray(data) ? data : []);
@@ -131,15 +134,13 @@ function MyBooksContent() {
                   </Button>
                 )}
 
-                {book.status === 'approved' && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => router.push(`/book/${book.id}`)}
-                  >
-                    보기
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => router.push(`/book/${book.id}`)}
+                >
+                  미리보기
+                </Button>
 
                 {book.status === 'draft' && (
                   <Button
